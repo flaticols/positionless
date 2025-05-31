@@ -1,4 +1,3 @@
-// analyzer.go
 package main
 
 import (
@@ -28,7 +27,6 @@ func init() {
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	// Skip generated files unless explicitly requested
 	if !includeGenerated {
 		for _, file := range pass.Files {
 			if isGeneratedFile(file) {
@@ -37,7 +35,6 @@ func run(pass *analysis.Pass) (any, error) {
 			analyzeFile(pass, file)
 		}
 	} else {
-		// Analyze all files including generated ones
 		for _, file := range pass.Files {
 			analyzeFile(pass, file)
 		}
@@ -61,7 +58,6 @@ func isGeneratedFile(file *ast.File) bool {
 }
 
 func analyzeFile(pass *analysis.Pass, file *ast.File) {
-	// Debug: show what files we're processing
 	pos := pass.Fset.Position(file.Pos())
 	fmt.Printf("Analyzing: %s\n", pos.Filename)
 
@@ -80,11 +76,10 @@ func checkCompositeLit(pass *analysis.Pass, cl *ast.CompositeLit) {
 
 	structType := getStructType(pass, cl)
 	if structType == nil {
-		return // Not a struct or can't determine type
+		return
 	}
 
 	if len(cl.Elts) > structType.NumFields() {
-		// More elements than fields - unsafe to fix
 		return
 	}
 
@@ -106,10 +101,9 @@ func isPositionalStruct(cl *ast.CompositeLit) bool {
 		return false
 	}
 
-	// Check if any element is a key-value pair
 	for _, elt := range cl.Elts {
 		if _, ok := elt.(*ast.KeyValueExpr); ok {
-			return false // Already has named fields
+			return false
 		}
 	}
 
@@ -123,7 +117,6 @@ func getStructType(pass *analysis.Pass, cl *ast.CompositeLit) *types.Struct {
 	}
 
 	typ := tv.Type
-	// Handle pointer to struct
 	if ptr, ok := typ.(*types.Pointer); ok {
 		typ = ptr.Elem()
 	}
@@ -141,29 +134,26 @@ func createNamedFieldsFix(pass *analysis.Pass, cl *ast.CompositeLit,
 
 	var newText strings.Builder
 
-	// Get the type name for the fix
 	_ = pass.Fset.Position(cl.Lbrace)
 	newText.WriteString("{\n")
 
 	for i, elt := range cl.Elts {
 		if i >= structType.NumFields() {
-			return nil // Safety check
+			return nil
 		}
 
 		field := structType.Field(i)
 		if !field.Exported() {
-			return nil // Can't reference unexported fields
+			return nil
 		}
 
-		// Get the original text of the element
 		eltStart := pass.Fset.Position(elt.Pos())
 		eltEnd := pass.Fset.Position(elt.End())
 
 		if eltStart.Filename != eltEnd.Filename {
-			return nil // Spans multiple files somehow
+			return nil
 		}
 
-		// Read the source text
 		src, err := os.ReadFile(eltStart.Filename)
 		if err != nil {
 			return nil
