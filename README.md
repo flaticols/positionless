@@ -37,16 +37,21 @@ positionless ./pkg/mypackage
 
 # Include generated files (excluded by default)
 positionless -generated ./...
+
+# Apply suggested fixes automatically
+positionless -fix ./...
 ```
 
-### With golangci-lint
+### Using with other tools
 
-Add to your `.golangci.yml`:
+This tool pairs well with `fieldalignment` analyzer. Run `positionless` first to convert positional literals to named fields, then run `fieldalignment` to optimize struct memory layout:
 
-```yaml
-linters:
-  enable:
-    - positionless
+```bash
+# First, fix positional initialization
+positionless -fix ./...
+
+# Then, optimize field alignment
+fieldalignment -fix ./...
 ```
 
 ### In your editor
@@ -60,9 +65,10 @@ The analyzer:
 1. Scans your Go code for struct literal initialization
 2. Identifies positional initialization patterns
 3. Suggests fixes that convert to named field initialization
-4. Preserves your original values and formatting
-5. Only processes exported fields (respects Go's visibility rules)
-6. Skips generated files by default
+4. Can automatically apply fixes with the `-fix` flag
+5. Preserves your original values and formatting
+6. Only processes exported fields (respects Go's visibility rules)
+7. Skips generated files by default (use `-generated` to include them)
 
 ## Example
 
@@ -97,7 +103,3 @@ MIT License - see LICENSE file for details
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Credits
-
-Built with [golang.org/x/tools/go/analysis](https://pkg.go.dev/golang.org/x/tools/go/analysis) framework.
