@@ -6,6 +6,9 @@ A Go static analyzer that detects positional struct literal initialization and s
 
 Positional struct literals are fragile and can lead to bugs when struct fields are reordered or new fields are added. This analyzer helps you find and fix these issues automatically.
 
+> [!WARNING]
+> Positional struct literals break when fields are reordered or new fields are added in the middle of a struct
+
 ```go
 // Bad - positional initialization
 person := Person{"John", 30, "john@example.com"}
@@ -42,6 +45,21 @@ positionless -generated ./...
 positionless -fix ./...
 ```
 
+### With go vet
+
+You can use this analyzer with `go vet`:
+
+```bash
+# Run the analyzer with go vet
+go vet -vettool=$(which positionless) ./...
+
+# Apply fixes with go vet
+go vet -vettool=$(which positionless) -fix ./...
+```
+
+> [!TIP]
+> Add this to your CI/CD pipeline to catch positional struct literals early
+
 ### Using with other tools
 
 This tool pairs well with `fieldalignment` analyzer. Run `positionless` first to convert positional literals to named fields, then run `fieldalignment` to optimize struct memory layout:
@@ -53,6 +71,9 @@ positionless -fix ./...
 # Then, optimize field alignment
 fieldalignment -fix ./...
 ```
+
+> [!NOTE]
+> Running `positionless` before `fieldalignment` ensures that field reordering won't break your code
 
 ### In your editor
 
@@ -95,6 +116,9 @@ cfg := Config{
     RetryMax: 3,
 }
 ```
+
+> [!IMPORTANT]
+> The analyzer only processes exported fields to respect Go's visibility rules
 
 ## License
 
