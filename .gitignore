@@ -19,7 +19,6 @@ go.work
 go.work.sum
 
 # Binary output
-unfuckstructinit
 positionless
 
 # IDE files
