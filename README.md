@@ -1,4 +1,4 @@
-# unfuckstructinit
+# positionless
 
 A Go static analyzer that detects positional struct literal initialization and suggests converting them to named field initialization for better code maintainability.
 
@@ -21,7 +21,7 @@ person := Person{
 ## Installation
 
 ```bash
-go install github.com/[your-username]/unfuckstructinit@latest
+go install github.com/flaticols/positionless@latest
 ```
 
 ## Usage
@@ -30,13 +30,13 @@ go install github.com/[your-username]/unfuckstructinit@latest
 
 ```bash
 # Analyze current directory
-unfuckstructinit ./...
+positionless ./...
 
 # Analyze specific package
-unfuckstructinit ./pkg/mypackage
+positionless ./pkg/mypackage
 
 # Include generated files (excluded by default)
-unfuckstructinit -generated ./...
+positionless -generated ./...
 ```
 
 ### With golangci-lint
@@ -46,7 +46,7 @@ Add to your `.golangci.yml`:
 ```yaml
 linters:
   enable:
-    - unfuckstructinit
+    - positionless
 ```
 
 ### In your editor
@@ -56,6 +56,7 @@ Most Go editors support running custom analyzers. Configure your editor to run t
 ## How it works
 
 The analyzer:
+
 1. Scans your Go code for struct literal initialization
 2. Identifies positional initialization patterns
 3. Suggests fixes that convert to named field initialization
