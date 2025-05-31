@@ -8,17 +8,15 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/analysis/singlechecker"
 )
 
 var includeGenerated bool
 
 var Analyzer = &analysis.Analyzer{
-	Name:     "positionless",
-	Doc:      "reports positional struct literal initialization",
-	Requires: []*analysis.Analyzer{inspect.Analyzer},
-	Run:      run,
+	Name: "positionless",
+	Doc:  "reports positional struct literal initialization",
+	Run:  run,
 }
 
 func init() {
@@ -58,9 +56,6 @@ func isGeneratedFile(file *ast.File) bool {
 }
 
 func analyzeFile(pass *analysis.Pass, file *ast.File) {
-	pos := pass.Fset.Position(file.Pos())
-	fmt.Printf("Analyzing: %s\n", pos.Filename)
-
 	ast.Inspect(file, func(n ast.Node) bool {
 		if cl, ok := n.(*ast.CompositeLit); ok {
 			checkCompositeLit(pass, cl)
@@ -111,7 +106,7 @@ func isPositionalStruct(cl *ast.CompositeLit) bool {
 }
 
 func getStructType(pass *analysis.Pass, cl *ast.CompositeLit) *types.Struct {
-	tv, ok := pass.TypesInfo.Types[cl]
+	tv, ok := pass.TypesInfo.Types[cl.Type]
 	if !ok {
 		return nil
 	}
@@ -121,7 +116,7 @@ func getStructType(pass *analysis.Pass, cl *ast.CompositeLit) *types.Struct {
 		typ = ptr.Elem()
 	}
 
-	structType, ok := typ.(*types.Struct)
+	structType, ok := typ.Underlying().(*types.Struct)
 	if !ok {
 		return nil
 	}
