@@ -24,17 +24,34 @@ inputs:
     required: false
     default: 'latest'
 
+outputs:
+  findings-count:
+    description: 'Number of positional struct literals found'
+    value: ${{ steps.analyze.outputs.findings-count }}
+  fixed-count:
+    description: 'Number of fixes applied (when fix is enabled)'
+    value: ${{ steps.analyze.outputs.fixed-count }}
+  exit-code:
+    description: 'Exit code from the analyzer (0 if successful)'
+    value: ${{ steps.analyze.outputs.exit-code }}
+  version:
+    description: 'Version of positionless used'
+    value: ${{ steps.download.outputs.version }}
+
 runs:
   using: 'composite'
   steps:
-    - name: Download positionless
+    - name: Setup - Download and install positionless binary
+      id: download
       shell: bash
       run: |
         # Determine version
         VERSION="${{ inputs.version }}"
         if [ "$VERSION" = "latest" ]; then
+          echo "Fetching latest version..."
           VERSION=$(curl -s https://api.github.com/repos/flaticols/positionless/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
         
         # Determine platform and architecture
         OS=$(uname -s)
@@ -66,7 +83,8 @@ runs:
         # Add to PATH
         echo "$PWD" >> $GITHUB_PATH
 
-    - name: Run positionless analyzer
+    - name: Analyze - Run positionless on codebase
+      id: analyze
       shell: bash
       run: |
         FLAGS=""
@@ -78,4 +96,22 @@ runs:
         fi
         
         echo "Running: positionless $FLAGS ${{ inputs.path }}"
-        positionless $FLAGS ${{ inputs.path }}
+        
+        # Run analyzer and capture output
+        OUTPUT=$(positionless $FLAGS ${{ inputs.path }} 2>&1) || EXIT_CODE=$?
+        echo "$OUTPUT"
+        
+        # Parse output for metrics
+        FINDINGS_COUNT=$(echo "$OUTPUT" | grep -c "positional struct literal" || echo "0")
+        FIXED_COUNT=0
+        if [ "${{ inputs.fix }}" == "true" ]; then
+          FIXED_COUNT=$(echo "$OUTPUT" | grep -c "Fixed:" || echo "0")
+        fi
+        
+        # Set outputs
+        echo "findings-count=$FINDINGS_COUNT" >> $GITHUB_OUTPUT
+        echo "fixed-count=$FIXED_COUNT" >> $GITHUB_OUTPUT
+        echo "exit-code=${EXIT_CODE:-0}" >> $GITHUB_OUTPUT
+        
+        # Exit with original exit code
+        exit ${EXIT_CODE:-0}
