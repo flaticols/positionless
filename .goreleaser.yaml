@@ -1,0 +1,49 @@
+version: 2
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s"
+      - "-w"
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    # use zip for windows archives
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+brews:
+  - name: positionless
+    url_template: "https://github.com/flaticols/positionless/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    commit_author:
+      name: Denis Panfilov
+      email: gh@flaticols.dev
+    directory: Formula
+    description: "A Go static analyzer that detects positional struct literal initialization and suggests converting them to named field initialization for better code maintainability."
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    license: "MIT"
+    repository:
+      owner: flaticols
+      name: homebrew-apps
+      branch: main
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"

@@ -23,8 +23,16 @@ person := Person{
 
 ## Installation
 
+### Go
+
 ```bash
 go install github.com/flaticols/positionless@latest
+```
+
+### Homebrew
+
+```bash
+brew install flaticols/apps/bump
 ```
 
 ## Usage
