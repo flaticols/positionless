@@ -87,6 +87,56 @@ fieldalignment -fix ./...
 
 Most Go editors support running custom analyzers. Configure your editor to run this analyzer for real-time feedback.
 
+### As a GitHub Action
+
+You can use `positionless` in your GitHub workflows to automatically check for positional struct literals:
+
+```yaml
+name: Code Analysis
+on: [push, pull_request]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Check for positional struct literals
+      - uses: flaticols/positionless@v1
+```
+
+To automatically fix issues and commit the changes:
+
+```yaml
+name: Auto-fix Positional Literals
+on: [push]
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Fix positional struct literals
+      - uses: flaticols/positionless@v1
+        with:
+          fix: true
+          
+      # Commit changes if any
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'fix: convert positional struct literals to named fields'
+```
+
+#### Action Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `path` | Path to analyze | `./...` |
+| `fix` | Apply suggested fixes automatically | `false` |
+| `include-generated` | Include generated files in analysis | `false` |
+| `version` | Version of positionless to use | `latest` |
+
 ## How it works
 
 The analyzer:
