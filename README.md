@@ -137,6 +137,96 @@ jobs:
 | `include-generated` | Include generated files in analysis | `false` |
 | `version` | Version of positionless to use | `latest` |
 
+#### Example Output
+
+Here's what the GitHub Action output looks like when it detects positional struct literals:
+
+```
+Run flaticols/positionless@v1
+Run # Determine version
+Fetching latest version...
+Downloading positionless v1 for Linux_x86_64...
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+
+100 2669k  100 2669k    0     0  7746k      0 --:--:-- --:--:-- --:--:-- 7746k
+Run FLAGS=""
+Running: positionless  ./...
+Error: /home/runner/work/bump/bump/semver/version_test.go:19:18: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:20:23: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:21:24: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:22:29: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:23:35: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:36:19: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:37:19: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:38:24: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:39:26: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:40:25: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:41:30: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:42:36: positional struct literal initialization is fragile
+Error: /home/runner/work/bump/bump/semver/version_test.go:43:18: positional struct literal initialization is fragile
+Error: Process completed with exit code 3.
+```
+
+When issues are found, the action will fail with exit code 3, causing your CI pipeline to fail. This helps catch positional struct literals before they're merged into your main branch.
+
+#### Real-world Example
+
+Here's an actual fix that `positionless` would apply to the code from the example above:
+
+```diff
+func TestParse(t *testing.T) {
+        tests := []parseTestsInput{
+-               {nil, "1.2.3", Version{nil, nil, 1, 2, 3}, false},
+-               {nil, "1.2.3-beta", Version{[]string{"beta"}, nil, 1, 2, 3}, false},
+-               {nil, "1.2.3+build", Version{nil, []string{"build"}, 1, 2, 3}, false},
+-               {nil, "1.2.3-beta+build", Version{[]string{"beta"}, []string{"build"}, 1, 2, 3}, false},
+-               {nil, "1.2.3-beta.1+build.123", Version{[]string{"beta", "1"}, []string{"build", "123"}, 1, 2, 3}, false},
++               {nil, "1.2.3", Version{
++                       Prerelease: nil,
++                       Metadata:   nil,
++                       Major:      1,
++                       Minor:      2,
++                       Patch:      3,
++               }, false},
++               {nil, "1.2.3-beta", Version{
++                       Prerelease: []string{"beta"},
++                       Metadata:   nil,
++                       Major:      1,
++                       Minor:      2,
++                       Patch:      3,
++               }, false},
++               {nil, "1.2.3+build", Version{
++                       Prerelease: nil,
++                       Metadata:   []string{"build"},
++                       Major:      1,
++                       Minor:      2,
++                       Patch:      3,
++               }, false},
++               {nil, "1.2.3-beta+build", Version{
++                       Prerelease: []string{"beta"},
++                       Metadata:   []string{"build"},
++                       Major:      1,
++                       Minor:      2,
++                       Patch:      3,
++               }, false},
++               {nil, "1.2.3-beta.1+build.123", Version{
++                       Prerelease: []string{"beta", "1"},
++                       Metadata:   []string{"build", "123"},
++                       Major:      1,
++                       Minor:      2,
++                       Patch:      3,
++               }, false},
+                {ErrMalformedCore, "78", Version{}, true},
+                {ErrMalformedCore, "1.2", Version{}, true},
+                {ErrMalformedCore, "1.2.3.4", Version{}, true},
+```
+
+Running `positionless -fix ./...` would automatically apply these changes, making your code more maintainable and resistant to struct field reordering.
+
 ## How it works
 
 The analyzer:
