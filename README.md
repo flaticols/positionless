@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@v4
       
       # Check for positional struct literals
-      - uses: flaticols/positionless@v1
+      - uses: flaticols/positionless@v2
 ```
 
 To automatically fix issues and commit the changes:
@@ -118,7 +118,7 @@ jobs:
       - uses: actions/checkout@v4
       
       # Fix positional struct literals
-      - uses: flaticols/positionless@v1
+      - uses: flaticols/positionless@v2
         with:
           fix: true
           
@@ -142,10 +142,10 @@ jobs:
 Here's what the GitHub Action output looks like when it detects positional struct literals:
 
 ```
-Run flaticols/positionless@v1
+Run flaticols/positionless@v2
 Run # Determine version
 Fetching latest version...
-Downloading positionless v1 for Linux_x86_64...
+Downloading positionless v2 for Linux_x86_64...
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 
