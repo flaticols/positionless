@@ -51,7 +51,7 @@ runs:
           echo "Fetching latest version..."
           VERSION=$(curl -s https://api.github.com/repos/flaticols/positionless/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         fi
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         
         # Determine platform and architecture
         OS=$(uname -s)
@@ -99,19 +99,29 @@ runs:
         
         # Run analyzer and capture output
         OUTPUT=$(positionless $FLAGS ${{ inputs.path }} 2>&1) || EXIT_CODE=$?
-        echo "$OUTPUT"
         
-        # Parse output for metrics
-        FINDINGS_COUNT=$(echo "$OUTPUT" | grep -c "positional struct literal" || echo "0")
-        FIXED_COUNT=0
-        if [ "${{ inputs.fix }}" == "true" ]; then
-          FIXED_COUNT=$(echo "$OUTPUT" | grep -c "Fixed:" || echo "0")
+        # Only echo output if it's not empty
+        if [ -n "$OUTPUT" ]; then
+          echo "$OUTPUT"
         fi
         
-        # Set outputs
-        echo "findings-count=$FINDINGS_COUNT" >> $GITHUB_OUTPUT
-        echo "fixed-count=$FIXED_COUNT" >> $GITHUB_OUTPUT
-        echo "exit-code=${EXIT_CODE:-0}" >> $GITHUB_OUTPUT
+        # Parse output for metrics
+        if [ -n "$OUTPUT" ]; then
+          FINDINGS_COUNT=$(echo "$OUTPUT" | grep -c "positional struct literal" || echo "0")
+          if [ "${{ inputs.fix }}" == "true" ]; then
+            FIXED_COUNT=$(echo "$OUTPUT" | grep -c "Fixed:" || echo "0")
+          else
+            FIXED_COUNT=0
+          fi
+        else
+          FINDINGS_COUNT=0
+          FIXED_COUNT=0
+        fi
+        
+        # Set outputs using the correct format
+        echo "findings-count=${FINDINGS_COUNT}" >> "$GITHUB_OUTPUT"
+        echo "fixed-count=${FIXED_COUNT}" >> "$GITHUB_OUTPUT"
+        echo "exit-code=${EXIT_CODE:-0}" >> "$GITHUB_OUTPUT"
         
         # Exit with original exit code
         exit ${EXIT_CODE:-0}
