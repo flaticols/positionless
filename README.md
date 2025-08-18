@@ -32,7 +32,7 @@ go install github.com/flaticols/positionless@latest
 ### Homebrew
 
 ```bash
-brew install flaticols/apps/bump
+brew install flaticols/apps/positionless
 ```
 
 ## Usage
