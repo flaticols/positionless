@@ -87,6 +87,57 @@ fieldalignment -fix ./...
 
 Most Go editors support running custom analyzers. Configure your editor to run this analyzer for real-time feedback.
 
+### With golangci-lint v2
+
+`positionless` supports [golangci-lint v2 module plugins](https://golangci-lint.run/docs/plugins/module-plugins/).
+
+**Step 1:** Create `.custom-gcl.yml` in your project root:
+
+```yaml
+version: v2.1.2
+plugins:
+  - module: 'github.com/flaticols/positionless'
+    import: 'github.com/flaticols/positionless'
+    version: v2.0.0
+```
+
+**Step 2:** Build custom golangci-lint:
+
+```bash
+# Build custom binary with positionless (requires golangci-lint v2 installed)
+golangci-lint custom
+```
+
+**Step 3:** Configure `.golangci.yml`:
+
+```yaml
+version: "2"
+linters:
+  enable:
+    - positionless
+  settings:
+    custom:
+      positionless:
+        type: "module"
+        description: Detect positional struct literals
+        # Pass flags via settings (optional)
+        settings:
+          generated: false
+          unexported: false
+          internal: true
+          ignore: ""
+          output: "text"
+```
+
+**Step 4:** Run:
+
+```bash
+./custom-gcl run ./...
+```
+
+> [!NOTE]
+> Module plugins are the recommended approach for golangci-lint v2. No toolchain version matching required.
+
 ### As a GitHub Action
 
 You can use `positionless` in your GitHub workflows to automatically check for positional struct literals:
@@ -236,8 +287,21 @@ The analyzer:
 3. Suggests fixes that convert to named field initialization
 4. Can automatically apply fixes with the `-fix` flag
 5. Preserves your original values and formatting
-6. Only processes exported fields (respects Go's visibility rules)
-7. Skips generated files by default (use `-generated` to include them)
+6. Skips generated files by default (use `-generated` to include them)
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `-fix` | Apply suggested fixes automatically |
+| `-generated` | Include generated files in analysis |
+| `-unexported` | Include structs with unexported fields in fixes |
+| `-internal` | Auto-allow unexported fields in `internal/` packages |
+| `-ignore=PATTERN` | Skip structs matching pattern (comma-separated) |
+| `-output=FORMAT` | Output format: `text` (default) or `json` |
+
+> [!TIP]
+> Use `-internal` when analyzing your own internal packages where you control all the code
 
 ## Example
 

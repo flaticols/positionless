@@ -31,8 +31,8 @@ func main() {
 	// Should trigger: single field struct
 	o := OneField{42} // want "positional struct literal initialization is fragile"
 	
-	// Should NOT trigger: struct with unexported fields (can't fix)
-	m := MixedExport{"public", 123, "another"}
+	// Should trigger but without fix: struct with unexported fields
+	m := MixedExport{"public", 123, "another"} // want "positional struct literal initialization is fragile \\(cannot auto-fix: contains unexported fields\\)"
 	
 	// Edge case: more values than fields (should NOT trigger - unsafe)
 	// This would be a compile error anyway
@@ -41,8 +41,9 @@ func main() {
 	// Should trigger: struct with embedded type
 	emb := Embedded{nil, 100} // want "positional struct literal initialization is fragile"
 	
-	// Should NOT trigger: struct with anonymous fields (can't reference by name)
-	anon := Anonymous{"text", 42}
+	// Should trigger but without fix: anonymous (embedded) fields like `string` and `int`
+	// use the type name as the field name, making them unexported
+	anon := Anonymous{"text", 42} // want "positional struct literal initialization is fragile \\(cannot auto-fix: contains unexported fields\\)"
 	
 	_ = e
 	_ = o

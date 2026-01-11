@@ -1,41 +1,139 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/types"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/singlechecker"
 )
 
-var includeGenerated bool
+const (
+	outputText = "text"
+	outputJSON = "json"
+)
+
+// Global flags - set by init() and read during analysis.
+// Note: These are safe for single-threaded use with singlechecker.Main().
+// For concurrent analysis (e.g., golangci-lint), each run should be isolated.
+var (
+	includeGenerated  bool
+	includeUnexported bool
+	detectInternal    bool
+	ignorePatterns    string
+	outputFormat      string
+)
+
+// JSONIssue represents a single diagnostic in golangci-lint compatible format
+type JSONIssue struct {
+	FromLinter string  `json:"FromLinter"`
+	Text       string  `json:"Text"`
+	Severity   string  `json:"Severity"`
+	Pos        JSONPos `json:"Pos"`
+	Fixable    bool    `json:"Fixable"`
+}
+
+type JSONPos struct {
+	Filename string `json:"Filename"`
+	Line     int    `json:"Line"`
+	Column   int    `json:"Column"`
+}
 
 var Analyzer = &analysis.Analyzer{
 	Name: "positionless",
-	Doc:  "reports positional struct literal initialization",
-	Run:  run,
+	Doc: `Detects positional struct literal initialization and suggests named fields.
+
+DESCRIPTION
+
+positionless finds struct literals that use positional arguments instead of
+named fields. Positional initialization is fragile because it breaks when
+struct fields are reordered or new fields are added.
+
+Example of problematic code:
+
+    // BAD: positional - breaks if Person fields change order
+    p := Person{"John", 30, "john@example.com"}
+
+    // GOOD: named fields - safe and self-documenting
+    p := Person{
+        Name:  "John",
+        Age:   30,
+        Email: "john@example.com",
+    }
+
+USAGE
+
+    positionless ./...                    # analyze all packages
+    positionless -fix ./...               # auto-fix issues
+    positionless -internal ./...          # include internal packages
+    positionless -output=json ./... 2>&1  # JSON output to stderr
+
+FLAGS
+
+    -fix                Apply suggested fixes automatically
+    -generated          Include generated files (default: excluded)
+    -unexported         Fix structs with unexported fields
+    -internal           Auto-allow unexported in internal/ packages
+    -ignore=PATTERN     Skip struct types matching pattern (comma-separated)
+    -output=FORMAT      Output format: text (default) or json
+
+INTEGRATION
+
+    Standalone:     positionless ./...
+    go vet:         go vet -vettool=$(which positionless) ./...
+    golangci-lint:  Use module plugin (see README)
+
+EXIT CODES
+
+    0  No issues found
+    1  Error occurred
+    3  Issues found (use in CI to fail builds)
+
+For golangci-lint v2 integration, this analyzer exports a New() function
+compatible with the module plugin system.`,
+	Run: run,
+}
+
+// New returns the analyzer for golangci-lint module plugin integration.
+// The conf parameter is currently unused - configuration is provided via
+// Analyzer.Flags which golangci-lint populates from linter settings.
+// See: https://golangci-lint.run/docs/plugins/module-plugins/
+func New(conf any) ([]*analysis.Analyzer, error) {
+	_ = conf // unused, configuration via Analyzer.Flags
+	return []*analysis.Analyzer{Analyzer}, nil
 }
 
 func init() {
 	Analyzer.Flags.BoolVar(&includeGenerated, "generated", false,
 		"include generated files in analysis")
+	Analyzer.Flags.BoolVar(&includeUnexported, "unexported", false,
+		"include structs with unexported fields in fixes")
+	Analyzer.Flags.BoolVar(&detectInternal, "internal", false,
+		"auto-allow unexported fields in internal/ packages")
+	Analyzer.Flags.StringVar(&ignorePatterns, "ignore", "",
+		"comma-separated patterns to ignore (e.g., 'ConfigTest,internal/legacy/*')")
+	Analyzer.Flags.StringVar(&outputFormat, "output", outputText,
+		"output format: 'text' (default) or 'json' (golangci-lint compatible)")
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	if !includeGenerated {
-		for _, file := range pass.Files {
-			if isGeneratedFile(file) {
-				continue
-			}
-			analyzeFile(pass, file)
+	// Validate output format
+	if outputFormat != outputText && outputFormat != outputJSON {
+		fmt.Fprintf(os.Stderr, "warning: invalid output format %q, using %q\n", outputFormat, outputText)
+		outputFormat = outputText
+	}
+
+	for _, file := range pass.Files {
+		if !includeGenerated && isGeneratedFile(file) {
+			continue
 		}
-	} else {
-		for _, file := range pass.Files {
-			analyzeFile(pass, file)
-		}
+		filePath := pass.Fset.Position(file.Pos()).Filename
+		analyzeFile(pass, file, filePath)
 	}
 
 	return nil, nil
@@ -55,17 +153,83 @@ func isGeneratedFile(file *ast.File) bool {
 	return false
 }
 
-func analyzeFile(pass *analysis.Pass, file *ast.File) {
+func analyzeFile(pass *analysis.Pass, file *ast.File, filePath string) {
 	ast.Inspect(file, func(n ast.Node) bool {
 		if cl, ok := n.(*ast.CompositeLit); ok {
-			checkCompositeLit(pass, cl)
+			checkCompositeLit(pass, cl, filePath)
 		}
 		return true
 	})
 }
 
-func checkCompositeLit(pass *analysis.Pass, cl *ast.CompositeLit) {
+// isInternalPackage checks if the file path contains /internal/.
+// Uses forward slashes after normalization via filepath.ToSlash,
+// so works correctly on both Unix and Windows systems.
+func isInternalPackage(filePath string) bool {
+	// Normalize path separators
+	normalized := filepath.ToSlash(filePath)
+	return strings.Contains(normalized, "/internal/")
+}
+
+// shouldAllowUnexported returns true if unexported fields should be processed
+func shouldAllowUnexported(filePath string) bool {
+	return includeUnexported || (detectInternal && isInternalPackage(filePath))
+}
+
+// matchesIgnorePattern checks if the struct type name matches any ignore pattern.
+// Supports both glob patterns (e.g., "*Test") and substring matching.
+func matchesIgnorePattern(typeName string) bool {
+	if ignorePatterns == "" || typeName == "" {
+		return false
+	}
+	patterns := strings.Split(ignorePatterns, ",")
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+		// Try glob pattern match first
+		if matched, err := filepath.Match(pattern, typeName); err == nil && matched {
+			return true
+		}
+		// Fall back to substring match for simple patterns
+		if strings.Contains(typeName, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// getTypeName extracts the type name from a composite literal
+func getTypeName(cl *ast.CompositeLit) string {
+	switch t := cl.Type.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		if ident, ok := t.X.(*ast.Ident); ok {
+			return ident.Name + "." + t.Sel.Name
+		}
+		return t.Sel.Name
+	case *ast.StarExpr:
+		// Handle pointer types like &Person{}
+		if ident, ok := t.X.(*ast.Ident); ok {
+			return ident.Name
+		}
+		if sel, ok := t.X.(*ast.SelectorExpr); ok {
+			return sel.Sel.Name
+		}
+	}
+	return ""
+}
+
+func checkCompositeLit(pass *analysis.Pass, cl *ast.CompositeLit, filePath string) {
 	if !isPositionalStruct(cl) {
+		return
+	}
+
+	// Check ignore patterns
+	typeName := getTypeName(cl)
+	if matchesIgnorePattern(typeName) {
 		return
 	}
 
@@ -78,17 +242,45 @@ func checkCompositeLit(pass *analysis.Pass, cl *ast.CompositeLit) {
 		return
 	}
 
-	fix := createNamedFieldsFix(pass, cl, structType)
-	if fix == nil {
+	allowUnexported := shouldAllowUnexported(filePath)
+	fix, hasUnexported := createNamedFieldsFix(pass, cl, structType, allowUnexported)
+
+	// Build diagnostic
+	pos := pass.Fset.Position(cl.Pos())
+	message := "positional struct literal initialization is fragile"
+
+	if hasUnexported && !allowUnexported {
+		message += " (cannot auto-fix: contains unexported fields)"
+	}
+
+	diagnostic := analysis.Diagnostic{
+		Pos:     cl.Pos(),
+		End:     cl.End(),
+		Message: message,
+	}
+
+	if fix != nil {
+		diagnostic.SuggestedFixes = []analysis.SuggestedFix{*fix}
+	}
+
+	// Output based on format
+	if outputFormat == outputJSON {
+		// JSON mode: output to stderr only, skip pass.Report() to avoid duplicate output
+		printJSONIssue(JSONIssue{
+			FromLinter: "positionless",
+			Text:       message,
+			Severity:   "warning",
+			Pos: JSONPos{
+				Filename: pos.Filename,
+				Line:     pos.Line,
+				Column:   pos.Column,
+			},
+			Fixable: fix != nil,
+		})
 		return
 	}
 
-	pass.Report(analysis.Diagnostic{
-		Pos:            cl.Pos(),
-		End:            cl.End(),
-		Message:        "positional struct literal initialization is fragile",
-		SuggestedFixes: []analysis.SuggestedFix{*fix},
-	})
+	pass.Report(diagnostic)
 }
 
 func isPositionalStruct(cl *ast.CompositeLit) bool {
@@ -124,38 +316,48 @@ func getStructType(pass *analysis.Pass, cl *ast.CompositeLit) *types.Struct {
 	return structType
 }
 
+// createNamedFieldsFix generates a fix for positional struct literals.
+// Returns the fix (or nil if not possible) and whether unexported fields were encountered.
 func createNamedFieldsFix(pass *analysis.Pass, cl *ast.CompositeLit,
-	structType *types.Struct) *analysis.SuggestedFix {
+	structType *types.Struct, allowUnexported bool) (*analysis.SuggestedFix, bool) {
+
+	if len(cl.Elts) == 0 {
+		return nil, false
+	}
+
+	// Read source file once (all elements are in the same file)
+	firstElt := pass.Fset.Position(cl.Elts[0].Pos())
+	src, err := os.ReadFile(firstElt.Filename)
+	if err != nil {
+		return nil, false
+	}
 
 	var newText strings.Builder
-
-	_ = pass.Fset.Position(cl.Lbrace)
+	hasUnexported := false
 	newText.WriteString("{\n")
 
 	for i, elt := range cl.Elts {
 		if i >= structType.NumFields() {
-			return nil
+			return nil, false
 		}
 
 		field := structType.Field(i)
 		if !field.Exported() {
-			return nil
+			hasUnexported = true
+			if !allowUnexported {
+				// Can't fix, but signal that unexported fields exist
+				return nil, true
+			}
 		}
 
 		eltStart := pass.Fset.Position(elt.Pos())
 		eltEnd := pass.Fset.Position(elt.End())
 
-		if eltStart.Filename != eltEnd.Filename {
-			return nil
-		}
-
-		src, err := os.ReadFile(eltStart.Filename)
-		if err != nil {
-			return nil
+		if eltStart.Filename != firstElt.Filename {
+			return nil, hasUnexported
 		}
 
 		eltText := string(src[eltStart.Offset:eltEnd.Offset])
-
 		newText.WriteString(fmt.Sprintf("\t%s: %s,\n", field.Name(), eltText))
 	}
 
@@ -170,9 +372,23 @@ func createNamedFieldsFix(pass *analysis.Pass, cl *ast.CompositeLit,
 				NewText: []byte(newText.String()),
 			},
 		},
-	}
+	}, hasUnexported
 }
 
 func main() {
 	singlechecker.Main(Analyzer)
+}
+
+// outputJSON prints all collected issues in golangci-lint compatible format.
+// This is called during analysis when jsonOutput is enabled, issues are
+// still reported normally but also collected for JSON output.
+// Note: The JSON is output incrementally as issues are found since
+// singlechecker.Main() calls os.Exit() and deferred functions don't run.
+func printJSONIssue(issue JSONIssue) {
+	data, err := json.Marshal(issue)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "positionless: failed to marshal JSON: %v\n", err)
+		return
+	}
+	fmt.Fprintln(os.Stderr, string(data))
 }
