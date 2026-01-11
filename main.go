@@ -38,8 +38,57 @@ type JSONPos struct {
 
 var Analyzer = &analysis.Analyzer{
 	Name: "positionless",
-	Doc:  "reports positional struct literal initialization",
-	Run:  run,
+	Doc: `Detects positional struct literal initialization and suggests named fields.
+
+DESCRIPTION
+
+positionless finds struct literals that use positional arguments instead of
+named fields. Positional initialization is fragile because it breaks when
+struct fields are reordered or new fields are added.
+
+Example of problematic code:
+
+    // BAD: positional - breaks if Person fields change order
+    p := Person{"John", 30, "john@example.com"}
+
+    // GOOD: named fields - safe and self-documenting
+    p := Person{
+        Name:  "John",
+        Age:   30,
+        Email: "john@example.com",
+    }
+
+USAGE
+
+    positionless ./...                    # analyze all packages
+    positionless -fix ./...               # auto-fix issues
+    positionless -internal ./...          # include internal packages
+    positionless -output=json ./... 2>&1  # JSON output to stderr
+
+FLAGS
+
+    -fix                Apply suggested fixes automatically
+    -generated          Include generated files (default: excluded)
+    -unexported         Fix structs with unexported fields
+    -internal           Auto-allow unexported in internal/ packages
+    -ignore=PATTERN     Skip struct types matching pattern (comma-separated)
+    -output=FORMAT      Output format: text (default) or json
+
+INTEGRATION
+
+    Standalone:     positionless ./...
+    go vet:         go vet -vettool=$(which positionless) ./...
+    golangci-lint:  Use module plugin (see README)
+
+EXIT CODES
+
+    0  No issues found
+    1  Error occurred
+    3  Issues found (use in CI to fail builds)
+
+For golangci-lint v2 integration, this analyzer exports a New() function
+compatible with the module plugin system.`,
+	Run: run,
 }
 
 // New returns the analyzer for golangci-lint module plugin integration.
