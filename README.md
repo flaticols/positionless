@@ -46,11 +46,20 @@ positionless ./...
 # Analyze specific package
 positionless ./pkg/mypackage
 
+# Apply suggested fixes automatically
+positionless -fix ./...
+
 # Include generated files (excluded by default)
 positionless -generated ./...
 
-# Apply suggested fixes automatically
-positionless -fix ./...
+# Fix structs with unexported fields in internal packages
+positionless -fix -internal ./...
+
+# Skip specific struct types
+positionless -ignore="ConfigTest,*Mock" ./...
+
+# JSON output for tooling integration
+positionless -output=json ./... 2>&1
 ```
 
 ### With go vet
@@ -186,7 +195,20 @@ jobs:
 | `path` | Path to analyze | `./...` |
 | `fix` | Apply suggested fixes automatically | `false` |
 | `include-generated` | Include generated files in analysis | `false` |
+| `include-unexported` | Include structs with unexported fields in fixes | `false` |
+| `include-internal` | Auto-allow unexported fields in `internal/` packages | `false` |
+| `ignore` | Comma-separated patterns to skip (e.g., `ConfigTest,*Mock`) | `` |
+| `output` | Output format: `text` or `json` | `text` |
 | `version` | Version of positionless to use | `latest` |
+
+#### Action Outputs
+
+| Output | Description |
+|--------|-------------|
+| `findings-count` | Number of positional struct literals found |
+| `fixed-count` | Number of fixes applied (when fix is enabled) |
+| `exit-code` | Exit code from the analyzer (0=success, 3=findings) |
+| `version` | Version of positionless used |
 
 #### Example Output
 
@@ -284,10 +306,11 @@ The analyzer:
 
 1. Scans your Go code for struct literal initialization
 2. Identifies positional initialization patterns
-3. Suggests fixes that convert to named field initialization
-4. Can automatically apply fixes with the `-fix` flag
-5. Preserves your original values and formatting
-6. Skips generated files by default (use `-generated` to include them)
+3. Reports all positional struct literals as warnings
+4. Suggests fixes that convert to named field initialization
+5. Can automatically apply fixes with the `-fix` flag
+6. Preserves your original values and formatting
+7. Skips generated files by default (use `-generated` to include them)
 
 ### Flags
 
@@ -297,11 +320,19 @@ The analyzer:
 | `-generated` | Include generated files in analysis |
 | `-unexported` | Include structs with unexported fields in fixes |
 | `-internal` | Auto-allow unexported fields in `internal/` packages |
-| `-ignore=PATTERN` | Skip structs matching pattern (comma-separated) |
-| `-output=FORMAT` | Output format: `text` (default) or `json` |
+| `-ignore=PATTERN` | Skip structs matching pattern (comma-separated, supports globs) |
+| `-output=FORMAT` | Output format: `text` (default) or `json` (golangci-lint compatible) |
 
 > [!TIP]
 > Use `-internal` when analyzing your own internal packages where you control all the code
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | No issues found |
+| 1 | Error occurred |
+| 3 | Issues found (useful for CI pipelines) |
 
 ## Example
 
@@ -330,7 +361,7 @@ cfg := Config{
 ```
 
 > [!IMPORTANT]
-> The analyzer only processes exported fields to respect Go's visibility rules
+> By default, the analyzer reports all positional structs but only auto-fixes those with exported fields. Use `-unexported` or `-internal` to enable fixes for structs with unexported fields.
 
 ## License
 
