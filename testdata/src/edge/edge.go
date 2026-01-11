@@ -41,7 +41,8 @@ func main() {
 	// Should trigger: struct with embedded type
 	emb := Embedded{nil, 100} // want "positional struct literal initialization is fragile"
 	
-	// Should trigger but without fix: struct with anonymous fields (unexported)
+	// Should trigger but without fix: anonymous (embedded) fields like `string` and `int`
+	// use the type name as the field name, making them unexported
 	anon := Anonymous{"text", 42} // want "positional struct literal initialization is fragile \\(cannot auto-fix: contains unexported fields\\)"
 	
 	_ = e

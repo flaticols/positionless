@@ -104,11 +104,8 @@ plugins:
 **Step 2:** Build custom golangci-lint:
 
 ```bash
-# Install custom-gcl builder
-go install github.com/golangci/golangci-lint/cmd/golangci-lint-custom@latest
-
-# Build custom binary with positionless
-golangci-lint-custom
+# Build custom binary with positionless (requires golangci-lint v2 installed)
+golangci-lint custom
 ```
 
 **Step 3:** Configure `.golangci.yml`:

@@ -18,6 +18,9 @@ const (
 	outputJSON = "json"
 )
 
+// Global flags - set by init() and read during analysis.
+// Note: These are safe for single-threaded use with singlechecker.Main().
+// For concurrent analysis (e.g., golangci-lint), each run should be isolated.
 var (
 	includeGenerated  bool
 	includeUnexported bool
@@ -159,7 +162,9 @@ func analyzeFile(pass *analysis.Pass, file *ast.File, filePath string) {
 	})
 }
 
-// isInternalPackage checks if the file path contains /internal/
+// isInternalPackage checks if the file path contains /internal/.
+// Uses forward slashes after normalization via filepath.ToSlash,
+// so works correctly on both Unix and Windows systems.
 func isInternalPackage(filePath string) bool {
 	// Normalize path separators
 	normalized := filepath.ToSlash(filePath)
