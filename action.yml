@@ -19,6 +19,22 @@ inputs:
     description: 'Include generated files in analysis'
     required: false
     default: 'false'
+  include-unexported:
+    description: 'Include structs with unexported fields in fixes'
+    required: false
+    default: 'false'
+  include-internal:
+    description: 'Auto-allow unexported fields in internal/ packages'
+    required: false
+    default: 'false'
+  ignore:
+    description: 'Comma-separated patterns to skip (e.g., ConfigTest,*Mock)'
+    required: false
+    default: ''
+  output:
+    description: 'Output format: text or json'
+    required: false
+    default: 'text'
   version:
     description: 'Version of positionless to use (default: latest)'
     required: false
@@ -94,7 +110,19 @@ runs:
         if [ "${{ inputs.include-generated }}" == "true" ]; then
           FLAGS="$FLAGS -generated"
         fi
-        
+        if [ "${{ inputs.include-unexported }}" == "true" ]; then
+          FLAGS="$FLAGS -unexported"
+        fi
+        if [ "${{ inputs.include-internal }}" == "true" ]; then
+          FLAGS="$FLAGS -internal"
+        fi
+        if [ -n "${{ inputs.ignore }}" ]; then
+          FLAGS="$FLAGS -ignore=${{ inputs.ignore }}"
+        fi
+        if [ "${{ inputs.output }}" != "text" ]; then
+          FLAGS="$FLAGS -output=${{ inputs.output }}"
+        fi
+
         echo "Running: positionless $FLAGS ${{ inputs.path }}"
         
         # Run analyzer and capture output

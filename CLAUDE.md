@@ -80,7 +80,8 @@ testdata/src/
 ├── generated/      # Generated file detection
 ├── internal/config # Internal package detection tests
 ├── unexported/     # Tests for -unexported flag
-└── ignore/         # Tests for -ignore flag
+├── ignore/         # Tests for -ignore flag
+└── jsontest/       # Tests for -output=json flag
 ```
 
 Test annotations use `// want "message"` comments to assert expected diagnostics:
