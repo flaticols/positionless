@@ -6,9 +6,25 @@ import (
 	"golang.org/x/tools/go/analysis/analysistest"
 )
 
+// Test package names
+const (
+	pkgBasic    = "basic"
+	pkgNested   = "nested"
+	pkgPointer  = "pointer"
+	pkgEdge     = "edge"
+	pkgGenerated = "generated"
+	pkgUnexported = "unexported"
+	pkgInternal   = "internal/config"
+	pkgIgnore     = "ignore"
+	pkgJSONTest   = "jsontest"
+)
+
+// Test ignore patterns
+const testIgnorePatterns = "MixedExport,Anonymous"
+
 func TestPositionless(t *testing.T) {
 	testdata := analysistest.TestData()
-	analysistest.Run(t, testdata, Analyzer, "basic", "nested", "pointer", "edge")
+	analysistest.Run(t, testdata, Analyzer, pkgBasic, pkgNested, pkgPointer, pkgEdge)
 }
 
 func TestPositionlessWithGenerated(t *testing.T) {
@@ -16,7 +32,7 @@ func TestPositionlessWithGenerated(t *testing.T) {
 	defer func() { includeGenerated = false }()
 
 	testdata := analysistest.TestData()
-	analysistest.Run(t, testdata, Analyzer, "generated")
+	analysistest.Run(t, testdata, Analyzer, pkgGenerated)
 }
 
 func TestPositionlessWithUnexported(t *testing.T) {
@@ -24,8 +40,7 @@ func TestPositionlessWithUnexported(t *testing.T) {
 	defer func() { includeUnexported = false }()
 
 	testdata := analysistest.TestData()
-	// With -unexported, MixedExport and Anonymous should have fixes
-	analysistest.Run(t, testdata, Analyzer, "unexported")
+	analysistest.Run(t, testdata, Analyzer, pkgUnexported)
 }
 
 func TestPositionlessWithInternal(t *testing.T) {
@@ -33,15 +48,23 @@ func TestPositionlessWithInternal(t *testing.T) {
 	defer func() { detectInternal = false }()
 
 	testdata := analysistest.TestData()
-	// With -internal, internal/ packages should have fixes for unexported fields
-	analysistest.Run(t, testdata, Analyzer, "internal/config")
+	analysistest.Run(t, testdata, Analyzer, pkgInternal)
 }
 
 func TestPositionlessWithIgnore(t *testing.T) {
-	ignorePatterns = "MixedExport,Anonymous"
+	ignorePatterns = testIgnorePatterns
 	defer func() { ignorePatterns = "" }()
 
 	testdata := analysistest.TestData()
-	// With ignore patterns, MixedExport and Anonymous should be skipped
-	analysistest.Run(t, testdata, Analyzer, "ignore")
+	analysistest.Run(t, testdata, Analyzer, pkgIgnore)
+}
+
+func TestPositionlessJSONOutput(t *testing.T) {
+	outputFormat = outputJSON
+	defer func() { outputFormat = outputText }()
+
+	testdata := analysistest.TestData()
+	// JSON mode outputs to stderr and skips pass.Report()
+	// Use jsontest package which has no // want annotations
+	analysistest.Run(t, testdata, Analyzer, pkgJSONTest)
 }

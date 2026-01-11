@@ -55,15 +55,15 @@ go vet -vettool=$(which positionless) -fix ./...
 </core_components>
 
 <key_code_points>
-**Detection logic** (`main.go:216-228`): A composite literal is positional if it has elements but none are `KeyValueExpr`.
+**Detection logic** (`isPositionalStruct`): A composite literal is positional if it has elements but none are `KeyValueExpr`.
 
-**Fix generation** (`main.go:249-302`): Reads source file bytes, extracts original element text by offset, reconstructs with field names. Returns both fix and unexported field status.
+**Fix generation** (`createNamedFieldsFix`): Reads source file once, extracts original element text by offset, reconstructs with field names. Returns both fix and unexported field status.
 
-**Type resolution** (`main.go:231-247`): Uses `pass.TypesInfo.Types` to get struct type, unwraps pointers via `typ.(*types.Pointer).Elem()`.
+**Type resolution** (`getStructType`): Uses `pass.TypesInfo.Types` to get struct type, unwraps pointers via `typ.(*types.Pointer).Elem()`.
 
-**Internal detection** (`main.go:94-103`): Checks if file path contains `/internal/` for auto-allowing unexported fields.
+**Internal detection** (`isInternalPackage`): Checks if file path contains `/internal/` for auto-allowing unexported fields.
 
-**Ignore patterns** (`main.go:105-124`): Supports glob patterns and substring matching for struct type names.
+**Ignore patterns** (`matchesIgnorePattern`): Supports glob patterns and substring matching for struct type names.
 </key_code_points>
 
 ## Test Structure

@@ -123,6 +123,13 @@ linters:
       positionless:
         type: "module"
         description: Detect positional struct literals
+        # Pass flags via settings (optional)
+        settings:
+          generated: false
+          unexported: false
+          internal: true
+          ignore: ""
+          output: "text"
 ```
 
 **Step 4:** Run:

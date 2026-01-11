@@ -13,6 +13,11 @@ import (
 	"golang.org/x/tools/go/analysis/singlechecker"
 )
 
+const (
+	outputText = "text"
+	outputJSON = "json"
+)
+
 var (
 	includeGenerated  bool
 	includeUnexported bool
@@ -92,8 +97,11 @@ compatible with the module plugin system.`,
 }
 
 // New returns the analyzer for golangci-lint module plugin integration.
+// The conf parameter is currently unused - configuration is provided via
+// Analyzer.Flags which golangci-lint populates from linter settings.
 // See: https://golangci-lint.run/docs/plugins/module-plugins/
 func New(conf any) ([]*analysis.Analyzer, error) {
+	_ = conf // unused, configuration via Analyzer.Flags
 	return []*analysis.Analyzer{Analyzer}, nil
 }
 
@@ -106,11 +114,17 @@ func init() {
 		"auto-allow unexported fields in internal/ packages")
 	Analyzer.Flags.StringVar(&ignorePatterns, "ignore", "",
 		"comma-separated patterns to ignore (e.g., 'ConfigTest,internal/legacy/*')")
-	Analyzer.Flags.StringVar(&outputFormat, "output", "text",
+	Analyzer.Flags.StringVar(&outputFormat, "output", outputText,
 		"output format: 'text' (default) or 'json' (golangci-lint compatible)")
 }
 
 func run(pass *analysis.Pass) (any, error) {
+	// Validate output format
+	if outputFormat != outputText && outputFormat != outputJSON {
+		fmt.Fprintf(os.Stderr, "warning: invalid output format %q, using %q\n", outputFormat, outputText)
+		outputFormat = outputText
+	}
+
 	for _, file := range pass.Files {
 		if !includeGenerated && isGeneratedFile(file) {
 			continue
@@ -157,22 +171,23 @@ func shouldAllowUnexported(filePath string) bool {
 	return includeUnexported || (detectInternal && isInternalPackage(filePath))
 }
 
-// matchesIgnorePattern checks if the struct type name matches any ignore pattern
+// matchesIgnorePattern checks if the struct type name matches any ignore pattern.
+// Supports both glob patterns (e.g., "*Test") and substring matching.
 func matchesIgnorePattern(typeName string) bool {
-	if ignorePatterns == "" {
+	if ignorePatterns == "" || typeName == "" {
 		return false
 	}
-	patterns := strings.SplitSeq(ignorePatterns, ",")
-	for pattern := range patterns {
+	patterns := strings.Split(ignorePatterns, ",")
+	for _, pattern := range patterns {
 		pattern = strings.TrimSpace(pattern)
 		if pattern == "" {
 			continue
 		}
-		matched, err := filepath.Match(pattern, typeName)
-		if err == nil && matched {
+		// Try glob pattern match first
+		if matched, err := filepath.Match(pattern, typeName); err == nil && matched {
 			return true
 		}
-		// Also check if pattern is contained in type name (simple substring match)
+		// Fall back to substring match for simple patterns
 		if strings.Contains(typeName, pattern) {
 			return true
 		}
@@ -243,8 +258,9 @@ func checkCompositeLit(pass *analysis.Pass, cl *ast.CompositeLit, filePath strin
 		diagnostic.SuggestedFixes = []analysis.SuggestedFix{*fix}
 	}
 
-	// Output JSON if enabled (JSON Lines format to stderr)
-	if outputFormat == "json" {
+	// Output based on format
+	if outputFormat == outputJSON {
+		// JSON mode: output to stderr only, skip pass.Report() to avoid duplicate output
 		printJSONIssue(JSONIssue{
 			FromLinter: "positionless",
 			Text:       message,
@@ -256,6 +272,7 @@ func checkCompositeLit(pass *analysis.Pass, cl *ast.CompositeLit, filePath strin
 			},
 			Fixable: fix != nil,
 		})
+		return
 	}
 
 	pass.Report(diagnostic)
@@ -299,10 +316,19 @@ func getStructType(pass *analysis.Pass, cl *ast.CompositeLit) *types.Struct {
 func createNamedFieldsFix(pass *analysis.Pass, cl *ast.CompositeLit,
 	structType *types.Struct, allowUnexported bool) (*analysis.SuggestedFix, bool) {
 
+	if len(cl.Elts) == 0 {
+		return nil, false
+	}
+
+	// Read source file once (all elements are in the same file)
+	firstElt := pass.Fset.Position(cl.Elts[0].Pos())
+	src, err := os.ReadFile(firstElt.Filename)
+	if err != nil {
+		return nil, false
+	}
+
 	var newText strings.Builder
 	hasUnexported := false
-
-	_ = pass.Fset.Position(cl.Lbrace)
 	newText.WriteString("{\n")
 
 	for i, elt := range cl.Elts {
@@ -322,17 +348,11 @@ func createNamedFieldsFix(pass *analysis.Pass, cl *ast.CompositeLit,
 		eltStart := pass.Fset.Position(elt.Pos())
 		eltEnd := pass.Fset.Position(elt.End())
 
-		if eltStart.Filename != eltEnd.Filename {
-			return nil, hasUnexported
-		}
-
-		src, err := os.ReadFile(eltStart.Filename)
-		if err != nil {
+		if eltStart.Filename != firstElt.Filename {
 			return nil, hasUnexported
 		}
 
 		eltText := string(src[eltStart.Offset:eltEnd.Offset])
-
 		newText.WriteString(fmt.Sprintf("\t%s: %s,\n", field.Name(), eltText))
 	}
 
@@ -362,8 +382,8 @@ func main() {
 func printJSONIssue(issue JSONIssue) {
 	data, err := json.Marshal(issue)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "positionless: failed to marshal JSON: %v\n", err)
 		return
 	}
-	// Output each issue as a JSON line to stderr (stdout has normal output)
 	fmt.Fprintln(os.Stderr, string(data))
 }
